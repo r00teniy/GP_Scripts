@@ -69,6 +69,7 @@
     </Reference>
     <Reference Include="AecBaseMgd">
       <HintPath>..\..\..\..\..\Program Files\Autodesk\AutoCAD 2022\AecBaseMgd.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="Autodesk.Map.Platform">
       <SpecificVersion>False</SpecificVersion>

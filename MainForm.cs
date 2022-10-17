@@ -1,11 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace P_Volumes
@@ -15,6 +8,26 @@ namespace P_Volumes
         public MainForm()
         {
             InitializeComponent();
+        }
+
+        private void calcvolumes_Click(object sender, EventArgs e)
+        {
+            int a = Lines3015_1.Checked ? 1 : 2;
+            int b = Lines208_1.Checked ? 1 : 2;
+            int c = Lines4518_1.Checked ? 1 : 2;
+
+            if (Xrefselect.SelectedIndex > -1)
+            {
+                MyCommands mcom = new MyCommands();
+                mcom.RealCount(Xrefselect.SelectedItem.ToString(), a, b, c);
+                MainForm obj = (MainForm)Application.OpenForms["MainForm"];
+                obj.Close();
+            }
+            else
+            {
+                errLabel.Text = "Выберите внешнюю ссылку основы";
+            }
+            
         }
     }
 }
