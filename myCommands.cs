@@ -47,9 +47,9 @@ namespace P_Volumes
             RXClass rxClassBlockRef = RXClass.GetClass(typeof(BlockReference));
             double[] TableValues = new double[19];
             string[] ErrorValues = new string[19];
-            string[] laylistPL = { "Основа|31_Борт_100.30.15", "Основа|32_Борт_100.20.8", "Основа|33_Борт_100.45.18", "Основа|34_Борт_Металл", "Основа|35_Борт_Пластик" };
+            string[] laylistPL = { "|31_Борт_100.30.15", "|32_Борт_100.20.8", "|33_Борт_100.45.18", "|34_Борт_Металл", "|35_Борт_Пластик" };
             int[] PL_count = { a, b, c, 1, 1 };
-            string[] laylistH = { "Основа|41_Покр_Проезд", "Основа|49_Покр_Щебеночный_проезд", "Основа|42_Покр_Тротуар", "Основа|42_Покр_Тротуар_Пожарный", "Основа|43_Покр_Отмостка", "Основа|44_Покр_Детская_площадка", "Основа|45_Покр_Спортивная_площадка", "Основа|46_Покр_Площадка_отдыха", "Основа|47_Покр_Хоз_площадка", "Основа|48_Покр_Площадка_для_собак", "Основа|51_Газон", "Основа|52_Газон_пожарный" };
+            string[] laylistH = { "|41_Покр_Проезд", "|49_Покр_Щебеночный_проезд", "|42_Покр_Тротуар", "|42_Покр_Тротуар_Пожарный", "|43_Покр_Отмостка", "|44_Покр_Детская_площадка", "|45_Покр_Спортивная_площадка", "|46_Покр_Площадка_отдыха", "|47_Покр_Хоз_площадка", "|48_Покр_Площадка_для_собак", "|51_Газон", "|52_Газон_пожарный" };
             string[] laylistBL = { "52_Деревья", "51_Кустарники" };
 
             using (Transaction trans = db.TransactionManager.StartTransaction())
@@ -75,7 +75,7 @@ namespace P_Volumes
                         var poly = trans.GetObject(objectId, OpenMode.ForRead) as Polyline;
                         for (int i = 0; i < laylistPL.Length; i++)
                         {
-                            if ((poly.Layer == laylistPL[i]) && poly != null)
+                            if ((poly.Layer == selectedOSN + laylistPL[i]) && poly != null)
                             {
                                 TableValues[14 + i] += poly.GetDistanceAtParameter(poly.EndParam) / PL_count[i];
                             }
@@ -88,7 +88,7 @@ namespace P_Volumes
                         var hat = trans.GetObject(objectId, OpenMode.ForRead) as Hatch;
                         for (int i = 0; i < laylistH.Length; i++)
                         {
-                            if ((hat.Layer == laylistH[i]) && hat != null)
+                            if ((hat.Layer == selectedOSN + laylistH[i]) && hat != null)
                             {
                                 try
                                 {
