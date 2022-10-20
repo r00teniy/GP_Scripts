@@ -13,6 +13,7 @@ namespace P_Volumes
 {
     public class MyCommands
     {
+        
         [CommandMethod("CountVol")]
         public void CountVol()
         {
@@ -120,6 +121,32 @@ namespace P_Volumes
                         }
 
                     }
+                    /* //attempt ot make it count blocks in array
+                    if (AssocArray.IsAssociativeArray(objectId)) 
+                    {
+                        using (BlockReference br = objectId.Open(OpenMode.ForRead) as BlockReference)
+                        {
+                            using (DBObjectCollection brs = new DBObjectCollection())
+                            {
+                                br.Explode(brs);
+                                if (brs != null && brs.Count > 0)
+                                {
+                                    foreach (DBObject obj in brs)
+                                    {
+                                        for (int j = 0; j < laylistBL.Length; j++)
+                                        {
+                                            //craches on next line
+                                            if (obj is BlockReference && (obj as BlockReference).Layer == laylistBL[j])
+                                            {
+                                                TableValues[12 + j] += 1;
+                                            }
+                                            obj.Dispose();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }*/
                 }
                 for (int k = 0; k < ErrorValues.Length; k++)
                 {
