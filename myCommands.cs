@@ -114,39 +114,43 @@ namespace P_Volumes
                         {
                             if ((blr.Layer == laylistBL[i]) && blr != null)
                             {
-                                TableValues[12+i] += 1;
+                                if (!AssocArray.IsAssociativeArray(objectId))
+                                {
+                                    TableValues[12 + i] += 1;
+                                }
                                 
                             }
 
                         }
 
                     }
-                    /* //attempt ot make it count blocks in array
+                     //attempt ot make it count blocks in array
                     if (AssocArray.IsAssociativeArray(objectId)) 
                     {
-                        using (BlockReference br = objectId.Open(OpenMode.ForRead) as BlockReference)
+                        using (BlockReference br = (BlockReference)objectId.Open(OpenMode.ForRead))
                         {
-                            using (DBObjectCollection brs = new DBObjectCollection())
+                            using (BlockTableRecord btr = br.DynamicBlockTableRecord.Open(OpenMode.ForRead) as BlockTableRecord)
                             {
-                                br.Explode(brs);
-                                if (brs != null && brs.Count > 0)
+                                foreach (ObjectId ids in btr)
                                 {
-                                    foreach (DBObject obj in brs)
+                                    if ( ids.ObjectClass.Name == "AcDbBlockReference")
                                     {
-                                        for (int j = 0; j < laylistBL.Length; j++)
+                                    using (BlockReference bRef = (BlockReference)ids.Open(OpenMode.ForRead))
                                         {
-                                            //craches on next line
-                                            if (obj is BlockReference && (obj as BlockReference).Layer == laylistBL[j])
+                                            for (int j = 0; j < laylistBL.Length; j++)
                                             {
-                                                TableValues[12 + j] += 1;
+                                                if (bRef.Layer == laylistBL[j])
+                                                {
+                                                    TableValues[12 + j] += 1;
+                                                }
                                             }
-                                            obj.Dispose();
                                         }
                                     }
                                 }
+
                             }
                         }
-                    }*/
+                    }
                 }
                 for (int k = 0; k < ErrorValues.Length; k++)
                 {
