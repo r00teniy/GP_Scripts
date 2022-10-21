@@ -171,7 +171,7 @@ namespace P_Volumes
             this.calcvolumes.Name = "calcvolumes";
             this.calcvolumes.Size = new System.Drawing.Size(196, 28);
             this.calcvolumes.TabIndex = 4;
-            this.calcvolumes.Text = "Расчитать объёмы";
+            this.calcvolumes.Text = "Рассчитать объёмы";
             this.calcvolumes.UseVisualStyleBackColor = true;
             this.calcvolumes.Click += new System.EventHandler(this.calcvolumes_Click);
             // 
