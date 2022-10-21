@@ -1,6 +1,7 @@
 ﻿// (C) Copyright 2022 by r00teniy 
 //
 using System;
+using System.Collections.Generic;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -13,7 +14,56 @@ namespace P_Volumes
 {
     public class MyCommands
     {
-        
+
+        [CommandMethod("CheckHatch")]
+        public void CheckHatch()
+        {
+            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Database db = doc.Database;
+            Editor ed = doc.Editor;
+            RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
+            List<ObjectId> errors = new List<ObjectId>(); //list of objectId
+            using (Transaction trans = db.TransactionManager.StartTransaction())
+            {
+                doc.LockDocument();
+                var blockTable = trans.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
+                var blocktableRecord = trans.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForRead, false) as BlockTableRecord;
+                //Finding self-intersecting Hatches
+                int i = 0;
+                foreach (ObjectId objectId in blocktableRecord)
+                {
+                    
+                    if (objectId.ObjectClass == rxClassHatch)
+                    {
+                        var hat = trans.GetObject(objectId, OpenMode.ForRead) as Hatch;
+
+                        try
+                        {
+                            var test = hat.Area;
+                        }
+                        catch
+                        {
+                            errors.Add(objectId); // Adding hatches that don't have Area
+                            i++;
+                        }
+
+                    }
+                }
+                // selecting objects
+                if (i == 0)
+                {
+                    ed.WriteMessage("Самопересечений не найдено"); // if all hatches have Area
+                }
+                else
+                {
+                    ed.WriteMessage("Выделено"+i+"самопересекающихся штриховок");
+                    ed.SetImpliedSelection(errors.ToArray()); // selecting bad hatches
+                    ed.SelectImplied();
+                }
+                trans.Commit();
+            }
+        }
+
         [CommandMethod("CountVol")]
         public void CountVol()
         {
@@ -33,7 +83,6 @@ namespace P_Volumes
             //Counting Volumes
         public void RealCount(string X, int a, int b, int c)
         {
-            
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             Editor ed = doc.Editor;
