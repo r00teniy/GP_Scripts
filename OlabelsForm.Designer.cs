@@ -118,7 +118,7 @@ namespace P_Volumes
             this.Bdist.Name = "Bdist";
             this.Bdist.Size = new System.Drawing.Size(26, 20);
             this.Bdist.TabIndex = 18;
-            this.Bdist.Text = "4";
+            this.Bdist.Text = "4.1";
             // 
             // label5
             // 
