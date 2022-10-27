@@ -347,6 +347,7 @@ namespace P_Volumes
             this.Controls.Add(this.label1);
             this.Name = "PlabelsForm";
             this.Text = "Подпись покрытий";
+            this.TopMost = true;
             this.ResumeLayout(false);
             this.PerformLayout();
 

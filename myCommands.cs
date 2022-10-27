@@ -86,7 +86,7 @@ namespace P_Volumes
                                         mText.Height = 1.25;
                                         mText.TextHeight = 1.25;
                                         mText.SetContentsRtf(a[i]);
-                                        mText.Location = new Point3d(center.X + 5, center.Y + 5, center.Z);
+                                        mText.Location = new Point3d(center.X + 2, center.Y + 2, center.Z);
                                         mText.Rotation = 0;
                                         mText.BackgroundFill = true;
                                         mText.BackgroundScaleFactor = 1.1;
