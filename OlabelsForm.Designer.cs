@@ -195,6 +195,7 @@ namespace P_Volumes
             this.Controls.Add(this.label2);
             this.Name = "OlabelsForm";
             this.Text = "Подпись озеленения";
+            this.TopMost = true;
             this.ResumeLayout(false);
             this.PerformLayout();
 

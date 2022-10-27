@@ -21,7 +21,6 @@ namespace P_Volumes
             // Getting list of Xrefs and starting form
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
-            Editor ed = doc.Editor;
             PlabelsForm pf = new PlabelsForm();
             XrefGraph XrGraph = db.GetHostDwgXrefGraph(false);
             for (int i = 1; i < XrGraph.NumNodes; i++)
