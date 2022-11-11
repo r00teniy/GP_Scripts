@@ -1,7 +1,9 @@
 ﻿// (C) Copyright 2022 by r00teniy 
 //
 using System;
+using System.Linq;
 using System.Collections.Generic;
+using System.Reflection;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -159,6 +161,164 @@ namespace P_Volumes
                 }
             }
             return pointsList;
+        }
+
+        public double SelfIntArea(HatchLoop loop, Plane plane, Transaction tr, Editor ed, BlockTableRecord btr)
+        {
+            //Modified code from Rivilis Restore Hatch Boundary program
+            Polyline looparea = new Polyline();
+            if (loop.IsPolyline)
+            {
+                using (Polyline poly = new Polyline())
+                {
+                    int iVertex = 0;
+                    foreach (BulgeVertex bv in loop.Polyline)
+                    {
+                        poly.AddVertexAt(iVertex++, bv.Vertex, bv.Bulge, 0.0, 0.0);
+                    }
+                    if (looparea != null)
+                    {
+                        looparea.JoinEntity(poly);
+                    }
+                    else
+                    {
+                        looparea = poly;
+                    }
+                }
+            }
+            else
+            {
+            foreach (Curve2d cv in loop.Curves)
+            {
+            
+            LineSegment2d line2d = cv as LineSegment2d;
+            CircularArc2d arc2d = cv as CircularArc2d;
+            EllipticalArc2d ellipse2d = cv as EllipticalArc2d;
+            NurbCurve2d spline2d = cv as NurbCurve2d;
+            if (line2d != null)
+            {
+                using (Line ent = new Line())
+                {
+                    try
+                    {
+                        ent.StartPoint = new Point3d(plane, line2d.StartPoint);
+                        ent.EndPoint = new Point3d(plane, line2d.EndPoint);
+                        looparea.JoinEntity(ent);
+                    }
+                    catch
+                    {
+                        looparea.AddVertexAt(0, line2d.StartPoint, 0, 0, 0);
+                        looparea.AddVertexAt(1, line2d.EndPoint, 0, 0, 0);
+                    }
+
+                }
+            }
+            else if (arc2d != null)
+            {
+                try
+                {
+                    if (arc2d.IsClosed() || Math.Abs(arc2d.EndAngle - arc2d.StartAngle) < 1e-5)
+                    {
+                        using (Circle ent = new Circle(new Point3d(plane, arc2d.Center), plane.Normal, arc2d.Radius))
+                        {
+                            looparea.JoinEntity(ent);
+                        }
+                    }
+                    else
+                    {
+                        if (arc2d.IsClockWise)
+                        {
+                            arc2d = arc2d.GetReverseParameterCurve() as CircularArc2d;
+                        }
+                        double angle = new Vector3d(plane, arc2d.ReferenceVector).AngleOnPlane(plane);
+                        double startAngle = arc2d.StartAngle + angle;
+                        double endAngle = arc2d.EndAngle + angle;
+                        using (Arc ent = new Arc(new Point3d(plane, arc2d.Center), plane.Normal, arc2d.Radius, startAngle, endAngle))
+                        {
+                           looparea.JoinEntity(ent);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Calculating Bulge
+                    double deltaAng = arc2d.EndAngle - arc2d.StartAngle;
+                    if (deltaAng < 0)
+                        deltaAng += 2 * Math.PI;
+                    double GetArcBulge = Math.Tan(deltaAng * 0.25);
+                    //Adding first arc to polyline
+                    looparea.AddVertexAt(0, new Point2d(arc2d.StartPoint.X, arc2d.StartPoint.Y), GetArcBulge, 0, 0);
+                    looparea.AddVertexAt(1, new Point2d(arc2d.EndPoint.X, arc2d.EndPoint.Y), 0, 0, 0);
+                }
+            }
+            else if (ellipse2d != null)
+            {
+                //-------------------------------------------------------------------------------------------
+                // Bug: Can not assign StartParam and EndParam of Ellipse:
+                // Ellipse ent = new Ellipse(new Point3d(plane, e2d.Center), plane.Normal, 
+                //      new Vector3d(plane,e2d.MajorAxis) * e2d.MajorRadius,
+                //      e2d.MinorRadius / e2d.MajorRadius, e2d.StartAngle, e2d.EndAngle);
+                // ent.StartParam = e2d.StartAngle; 
+                // ent.EndParam = e2d.EndAngle;
+                // error CS0200: Property or indexer 'Autodesk.AutoCAD.DatabaseServices.Curve.StartParam' cannot be assigned to -- it is read only
+                // error CS0200: Property or indexer 'Autodesk.AutoCAD.DatabaseServices.Curve.EndParam' cannot be assigned to -- it is read only
+                //---------------------------------------------------------------------------------------------
+                // Workaround is using Reflection
+                // 
+                using (Ellipse ent = new Ellipse(new Point3d(plane, ellipse2d.Center), plane.Normal, new Vector3d(plane, ellipse2d.MajorAxis) * ellipse2d.MajorRadius, ellipse2d.MinorRadius / ellipse2d.MajorRadius, ellipse2d.StartAngle, ellipse2d.EndAngle))
+                {
+                    ent.GetType().InvokeMember("StartParam", BindingFlags.SetProperty, null, ent, new object[] { ellipse2d.StartAngle });
+                    ent.GetType().InvokeMember("EndParam", BindingFlags.SetProperty, null, ent, new object[] { ellipse2d.EndAngle });
+                    
+                    looparea.JoinEntity(ent);
+                }
+            }
+            else if (spline2d != null)
+            {
+                if (spline2d.HasFitData)
+                {
+                    NurbCurve2dFitData n2fd = spline2d.FitData;
+                    using (Point3dCollection p3ds = new Point3dCollection())
+                    {
+                        foreach (Point2d p in n2fd.FitPoints) p3ds.Add(new Point3d(plane, p));
+                        using (Spline ent = new Spline(p3ds, new Vector3d(plane, n2fd.StartTangent), new Vector3d(plane, n2fd.EndTangent), /* n2fd.KnotParam, */  n2fd.Degree, n2fd.FitTolerance.EqualPoint))
+                        {
+                            looparea.JoinEntity(ent);
+                        }
+                    }
+                }
+                else
+                {
+                    NurbCurve2dData n2fd = spline2d.DefinitionData;
+                    using (Point3dCollection p3ds = new Point3dCollection())
+                    {
+                        DoubleCollection knots = new DoubleCollection(n2fd.Knots.Count);
+                        foreach (Point2d p in n2fd.ControlPoints) p3ds.Add(new Point3d(plane, p));
+                        foreach (double k in n2fd.Knots) knots.Add(k);
+                        double period = 0;
+                        using (Spline ent = new Spline(n2fd.Degree, n2fd.Rational, spline2d.IsClosed(), spline2d.IsPeriodic(out period), p3ds, knots, n2fd.Weights, n2fd.Knots.Tolerance, n2fd.Knots.Tolerance))
+                        {
+                            looparea.JoinEntity(ent);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+            btr.AppendEntity(looparea);
+            tr.AddNewlyCreatedDBObject(looparea, true);
+            object pl = looparea.AcadObject;
+            var corrval = (double)pl.GetType().InvokeMember("Area", BindingFlags.GetProperty, null, pl, null);
+            PromptSelectionResult acSSPrompt = ed.SelectLast();
+            Entity delent;
+            SelectionSet ss = acSSPrompt.Value;
+            if (ss.Count > 0)
+            {
+                delent = tr.GetObject(ss[0].ObjectId, OpenMode.ForWrite) as Entity;
+                delent.Erase();
+            }
+            return corrval;
         }
 
         public List<List<Point3d>> GroupO (List<Point3d> Points, double Distance)
@@ -392,7 +552,6 @@ namespace P_Volumes
             // Getting list of Xrefs and starting form
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
-            Editor ed = doc.Editor;
             MainForm mf = new MainForm();
             XrefGraph XrGraph = db.GetHostDwgXrefGraph(false);
             for (int i = 1; i < XrGraph.NumNodes; i++)
@@ -407,6 +566,7 @@ namespace P_Volumes
         {
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
+            Editor ed = doc.Editor;
             XrefGraphNode OSNOVA;
             string selectedOSN = X;
             XrefGraph XrGraph = db.GetHostDwgXrefGraph(false);
@@ -435,7 +595,7 @@ namespace P_Volumes
                 using (DocumentLock acLckDoc = doc.LockDocument())
                 {
                     var blockTable = trans.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
-                    var blocktableRecord = trans.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForRead, false) as BlockTableRecord;
+                    var blocktableRecord = trans.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
                     var blocktableRecordOSN = trans.GetObject(OSNOVA.BlockTableRecordId, OpenMode.ForRead) as BlockTableRecord;
                     var Tabl = trans.GetObject(id, OpenMode.ForWrite) as Table;
                     foreach (ObjectId objectId in blocktableRecordOSN)
@@ -467,6 +627,24 @@ namespace P_Volumes
                                     catch
                                     {
                                         ErrorValues[i] = "Самопересечение";
+                                        //changing to count self-intersecting hatches
+                                        Plane plane = hat.GetPlane();
+                                        int nLoops = hat.NumberOfLoops;
+                                        double corArea = 0.0;
+                                        for (int k = 0; k < nLoops; k++)
+                                        {
+                                            HatchLoop loop = hat.GetLoopAt(k);
+                                            HatchLoopTypes hlt = hat.LoopTypeAt(k);
+                                            if (hlt == HatchLoopTypes.External)
+                                            {
+                                                corArea += SelfIntArea(loop, plane, trans, ed, blocktableRecord);
+                                            }
+                                            else
+                                            {
+                                                corArea -= SelfIntArea(loop, plane, trans, ed, blocktableRecord);
+                                            }
+                                        }
+                                        TableValues[i] += corArea;
                                     }
                                 }
 
@@ -476,7 +654,7 @@ namespace P_Volumes
                     }
                     TableValues[12] = GetBlocksPosition(blocktableRecord, trans, "52_Деревья").Count;
                     TableValues[13] = GetBlocksPosition(blocktableRecord, trans, "51_Кустарники").Count;
-                    for (int k = 0; k < ErrorValues.Length; k++)
+                    /*for (int k = 0; k < ErrorValues.Length; k++)
                     {
                         try
                         {
@@ -487,14 +665,14 @@ namespace P_Volumes
                             }
                         }
                         catch { }
-                    }
+                    }*/
                     for (int j = 0; j < TableValues.Length; j++)
                     {
                         if (TableValues[j] == 0)
                         {
                             ErrorValues[j] = "Нет Элементов";
                         }
-                        if (TableValues[j] > 0)
+                        if (TableValues[j] > 0 && ErrorValues[j] != "Самопересечение")
                         {
                             ErrorValues[j] = "Всё в порядке";
                         }
