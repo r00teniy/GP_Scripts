@@ -1,10 +1,5 @@
 ﻿// (C) Copyright 2022 by  
 //
-using System;
-using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.DatabaseServices;
-using Autodesk.AutoCAD.EditorInput;
-using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 
 // This line is not mandatory, but improves loading performances

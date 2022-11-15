@@ -27,7 +27,7 @@ namespace P_Volumes
             {
                 errLabel.Text = "Выберите внешнюю ссылку основы";
             }
-            
+
         }
     }
 }

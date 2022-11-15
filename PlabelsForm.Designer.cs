@@ -258,7 +258,7 @@ namespace P_Volumes
             this.pBox8.Name = "pBox8";
             this.pBox8.Size = new System.Drawing.Size(26, 20);
             this.pBox8.TabIndex = 24;
-            this.pBox8.Text = "4";
+            this.pBox8.Text = "2";
             // 
             // pBox10
             // 
@@ -346,7 +346,7 @@ namespace P_Volumes
             this.Controls.Add(this.Xrefselect);
             this.Controls.Add(this.label1);
             this.Name = "PlabelsForm";
-            this.Text = "Подпись покрытий";
+            this.Text = "`";
             this.TopMost = true;
             this.ResumeLayout(false);
             this.PerformLayout();
