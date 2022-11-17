@@ -346,6 +346,7 @@ namespace P_Volumes
             this.Controls.Add(this.Xrefselect);
             this.Controls.Add(this.label1);
             this.Name = "PlabelsForm";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "`";
             this.TopMost = true;
             this.ResumeLayout(false);

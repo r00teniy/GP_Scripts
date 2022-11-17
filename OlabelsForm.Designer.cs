@@ -194,6 +194,7 @@ namespace P_Volumes
             this.Controls.Add(this.Tnumber);
             this.Controls.Add(this.label2);
             this.Name = "OlabelsForm";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Подпись озеленения";
             this.TopMost = true;
             this.ResumeLayout(false);

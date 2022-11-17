@@ -5,9 +5,11 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
+using System.Linq;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Autodesk.AutoCAD.Colors;
 
 // This line is not mandatory, but improves loading performances
 [assembly: CommandClass(typeof(P_Volumes.MyCommands))]
@@ -16,6 +18,13 @@ namespace P_Volumes
 {
     public class MyCommands
     {
+
+        [CommandMethod("hInt")]
+        public void hInt()
+        {
+            hCheckForm hc = new hCheckForm();
+            hc.Show();
+        }
         [CommandMethod("Plabel")]
         public void Plabel()
         {
@@ -31,7 +40,184 @@ namespace P_Volumes
             }
             pf.Show();
         }
+        //Function finding intersection region of 2 polylines
+        public Region regInt(Polyline pl1, Polyline pl2)
+        {
+            DBObjectCollection c1 = new DBObjectCollection();
+            DBObjectCollection c2 = new DBObjectCollection();
+            c1.Add(pl1);
+            c2.Add(pl2);
+            var r1 = Region.CreateFromCurves(c1);
+            var r2 = Region.CreateFromCurves(c2);
+            if (r1 != null && r2 != null && r1.Count != 0 && r2.Count != 0)
+            {
+                Region r11 = r1.Cast<Region>().First();
+                Region r21 = r2.Cast<Region>().First();
+                r11.BooleanOperation(BooleanOperationType.BoolIntersect, r21);
+                return r11;
+            }
+            return null;
+        }
+        //Function to check hatches intersections
+        public void HatInt()
+        {
+            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Database db = doc.Database;
+            Editor ed = doc.Editor;
+            RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
+            string[] laylistH = { "15_Здание_заливка", "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный" };
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                using (DocumentLock acLckDoc = doc.LockDocument())
+                {
+                    var blockTable = tr.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
+                    var btr = tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
+                    List<Polyline> plines = new List<Polyline>();
+                    //Finding intersecting Hatches
+                    foreach (ObjectId objectId in btr)
+                    {
+                        if (objectId.ObjectClass == rxClassHatch)
+                        {
+                            var hat = tr.GetObject(objectId, OpenMode.ForRead) as Hatch;
+                            for (int i = 0; i < laylistH.Length; i++)
+                            {
+                                if ((hat.Layer == laylistH[i]) && hat != null)
+                                {
+                                    // can't instersec hatches, get polyline and intersect them or just get curves for each loop and intersect them??
+                                    Plane plane = hat.GetPlane();
+                                    int nLoops = hat.NumberOfLoops;
+                                    for (int k = 0; k < nLoops; k++)
+                                    {
+                                        HatchLoop loop = hat.GetLoopAt(k);
+                                        var tmp = SelfIntArea(loop, plane);
+                                        if (tmp != null)
+                                        {
+                                            plines.Add(tmp);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    int sCount = 1;
+                    for (int i = 0; i < plines.Count; i++)
+                    {
+                        for (int j = sCount; j < plines.Count; j++)
+                        {
+                            if (i != j)
+                            {
+                                Region aReg = regInt(plines[i], plines[j]);
+                                if (aReg != null && aReg.Area != 0)
+                                {
+                                    LayerTable lt = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
+                                    if (!lt.Has("80_Временная_геометрия"))
+                                    {
+                                        var newLayer = new LayerTableRecord();
+                                        newLayer.Name = "80_Временная_геометрия";
+                                        newLayer.Color = Color.FromColorIndex(ColorMethod.ByAci, 3);
+                                        newLayer.LineWeight = (LineWeight)200;
+                                        newLayer.IsPlottable = false;
 
+                                        lt.UpgradeOpen();
+                                        lt.Add(newLayer);
+                                        tr.AddNewlyCreatedDBObject(newLayer, true);
+                                    }
+                                    aReg.Layer = "80_Временная_геометрия";
+                                    btr.AppendEntity(aReg);
+                                    tr.AddNewlyCreatedDBObject(aReg, true);
+                                }
+                                else
+                                {
+                                    aReg.Dispose();
+                                }
+                            }
+                        }
+                        sCount++;
+                    }
+                    tr.Commit();
+                }
+            }
+        }
+        //Function to clear temporary geometry
+        public void ClearTemp()
+        {
+            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Database db = doc.Database;
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                using (DocumentLock acLckDoc = doc.LockDocument())
+                {
+                    var blockTable = tr.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
+                    var btr = tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
+                    foreach (ObjectId objectId in btr)
+                    {
+                        if (objectId.ObjectClass == RXClass.GetClass(typeof(Region)))
+                        {
+                            var obj = tr.GetObject(objectId, OpenMode.ForWrite) as Region;
+                            if (obj.Layer == "80_Временная_геометрия")
+                            {
+                                obj.Erase();
+                            }
+                        }
+                    }
+                }
+                tr.Commit();
+            }
+        }
+        //Function to check for rare cases then it isn't self-intersecting, but won't let you make region
+        public void hCheck()
+        {
+            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Database db = doc.Database;
+            Editor ed = doc.Editor;
+            RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
+            string[] laylistH = { "15_Здание_заливка", "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный" };
+            List<ObjectId> errors = new List<ObjectId>();
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                using (DocumentLock acLckDoc = doc.LockDocument())
+                {
+                    var blockTable = tr.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
+                    var btr = tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
+                    int errCount = 0;
+                    foreach (ObjectId objectId in btr)
+                    {
+                        if (objectId.ObjectClass == rxClassHatch)
+                        {
+                            var hat = tr.GetObject(objectId, OpenMode.ForRead) as Hatch;
+                            for (int i = 0; i < laylistH.Length; i++)
+                            {
+                                if ((hat.Layer == laylistH[i]) && hat != null)
+                                {
+                                    Plane plane = hat.GetPlane();
+                                    int nLoops = hat.NumberOfLoops;
+                                    for (int k = 0; k < nLoops; k++)
+                                    {
+                                        HatchLoop loop = hat.GetLoopAt(k);
+                                        if (SelfIntArea(loop, plane) == null)
+                                        {
+                                            errors.Add(objectId);
+                                            errCount++;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (errCount == 0)
+                    {
+                        ed.WriteMessage("Проблемных штриховок не найдено" + "\n"); // if all hatches give back polylines
+                    }
+                    else
+                    {
+                        ed.WriteMessage("Выделено" + errCount + "проблемных штриховок " + "\n");
+                        ed.SetImpliedSelection(errors.ToArray()); // selecting bad hatches
+                        ed.SelectImplied();
+                    }
+                }
+                tr.Commit();
+            }
+        }
         //Function that labels hatches based on layer
         public void DoPlabel(string X, string[] a)
         {
@@ -98,7 +284,7 @@ namespace P_Volumes
                                     }
                                     catch
                                     {
-                                        ed.WriteMessage("\n" + "Some error, please check hatches");
+                                        ed.WriteMessage("\n" + "Ошибки, проверьте штриховки" + "\n");
                                     }
                                 }
                             }
@@ -253,18 +439,6 @@ namespace P_Volumes
                     }
                     else if (ellipse2d != null)
                     {
-                        //-------------------------------------------------------------------------------------------
-                        // Bug: Can not assign StartParam and EndParam of Ellipse:
-                        // Ellipse ent = new Ellipse(new Point3d(plane, e2d.Center), plane.Normal, 
-                        //      new Vector3d(plane,e2d.MajorAxis) * e2d.MajorRadius,
-                        //      e2d.MinorRadius / e2d.MajorRadius, e2d.StartAngle, e2d.EndAngle);
-                        // ent.StartParam = e2d.StartAngle; 
-                        // ent.EndParam = e2d.EndAngle;
-                        // error CS0200: Property or indexer 'Autodesk.AutoCAD.DatabaseServices.Curve.StartParam' cannot be assigned to -- it is read only
-                        // error CS0200: Property or indexer 'Autodesk.AutoCAD.DatabaseServices.Curve.EndParam' cannot be assigned to -- it is read only
-                        //---------------------------------------------------------------------------------------------
-                        // Workaround is using Reflection
-                        // 
                         using (Ellipse ent = new Ellipse(new Point3d(plane, ellipse2d.Center), plane.Normal, new Vector3d(plane, ellipse2d.MajorAxis) * ellipse2d.MajorRadius, ellipse2d.MinorRadius / ellipse2d.MajorRadius, ellipse2d.StartAngle, ellipse2d.EndAngle))
                         {
                             ent.GetType().InvokeMember("StartParam", BindingFlags.SetProperty, null, ent, new object[] { ellipse2d.StartAngle });
@@ -484,9 +658,6 @@ namespace P_Volumes
                 trans.Commit();
             }
         }
-
-        [CommandMethod("CheckHatch")]
-
         public void CheckHatch()
         {
             Document doc = Application.DocumentManager.MdiActiveDocument;
@@ -521,11 +692,11 @@ namespace P_Volumes
                     // selecting objects
                     if (i == 0)
                     {
-                        ed.WriteMessage("Самопересечений не найдено"); // if all hatches have Area
+                        ed.WriteMessage("Самопересечений не найдено"+"\n"); // if all hatches have Area
                     }
                     else
                     {
-                        ed.WriteMessage("Выделено" + i + "самопересекающихся штриховок");
+                        ed.WriteMessage("Выделено" + i + "самопересекающихся штриховок" + "\n");
                         ed.SetImpliedSelection(errors.ToArray()); // selecting bad hatches
                         ed.SelectImplied();
                     }
@@ -655,18 +826,6 @@ namespace P_Volumes
                     }
                     TableValues[12] = GetBlocksPosition(blocktableRecord, trans, "52_Деревья").Count;
                     TableValues[13] = GetBlocksPosition(blocktableRecord, trans, "51_Кустарники").Count;
-                    /*for (int k = 0; k < ErrorValues.Length; k++)
-                    {
-                        try
-                        {
-                            Tabl.SetTextString(2 + k, 2, ErrorValues?[k]);
-                            if (ErrorValues[k] == "Самопересечение")
-                            {
-                                TableValues[k] = -1;
-                            }
-                        }
-                        catch { }
-                    }*/
                     for (int j = 0; j < TableValues.Length; j++)
                     {
                         if (TableValues[j] == 0)
