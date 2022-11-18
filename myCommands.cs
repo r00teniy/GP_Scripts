@@ -28,7 +28,7 @@ namespace P_Volumes
         //layers for Hatches
         public string[] laylistHatch = { "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный", "15_Здание_заливка" };
         //Layers for polylines
-        public string[] laylistPL = { "16_Здание_контур_площадь_застройки", "31_Борт_100.30.15", "32_Борт_100.20.8", "33_Борт_100.45.18", "34_Борт_Металл", "35_Борт_Пластик" };
+        public string[] laylistPL = { "09_Граница_благоустройства", "16_Здание_контур_площадь_застройки", "31_Борт_100.30.15", "32_Борт_100.20.8", "33_Борт_100.45.18", "34_Борт_Металл", "35_Борт_Пластик" };
         //Layers for blocks
         public string[] laylistBlock = { "51_Деревья", "52_Кустарники" };
         //Layer for pavement labels
@@ -799,13 +799,13 @@ namespace P_Volumes
             ObjectId idh = db.GetObjectId(false, new Handle(th), 0); // Getting table object 
             ObjectId idp = db.GetObjectId(false, new Handle(tp), 0);
             ObjectId idb = db.GetObjectId(false, new Handle(tb), 0);
-            double[] hatchValues = new double[12];
-            string[] hatchErrors = new string[12];
-            double[] plineValues = new double[6];
-            string[] plineErrors = new string[6];
-            double[] blockValues = new double[8];
-            string[] blockErrors = new string[8];
-            int[] PL_count = { 1, a, b, c, 1, 1 };
+            double[] hatchValues = new double[14];
+            string[] hatchErrors = new string[14];
+            double[] plineValues = new double[9];
+            string[] plineErrors = new string[9];
+            double[] blockValues = new double[10];
+            string[] blockErrors = new string[10];
+            int[] PL_count = { 1, 1, a, b, c, 1, 1 };
 
             using (Transaction trans = db.TransactionManager.StartTransaction())
             {
@@ -832,7 +832,7 @@ namespace P_Volumes
                             {
                                 if ((poly.Layer == selectedOSN + "|" + laylistPL[i]) && poly != null)
                                 {
-                                    if (i == 0) // for area
+                                    if (i <= 1) // for area
                                     {
                                         // Getting from AcadObject for cases of selfintersection
                                         object pl = poly.AcadObject;
@@ -894,7 +894,7 @@ namespace P_Volumes
                         }
                     }
                     // Rounding curbs
-                    for (int i = 1; i < plineValues.Length; i++)
+                    for (int i = 2; i < plineValues.Length; i++)
                     {
                         plineValues[i] = Math.Ceiling(plineValues[i]);
                     }
