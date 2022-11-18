@@ -19,7 +19,7 @@ namespace P_Volumes
             if (Xrefselect.SelectedIndex > -1)
             {
                 MyCommands mcom = new MyCommands();
-                mcom.RealCount(Xrefselect.SelectedItem.ToString(), a, b, c);
+                mcom.DoCount(Xrefselect.SelectedItem.ToString(), a, b, c);
                 MainForm obj = (MainForm)Application.OpenForms["MainForm"];
                 obj.Close();
             }

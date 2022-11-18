@@ -18,6 +18,51 @@ namespace P_Volumes
 {
     public class MyCommands
     {
+        public Document doc = Application.DocumentManager.MdiActiveDocument;
+        public Database db = Application.DocumentManager.MdiActiveDocument.Database;
+        public Editor ed = Application.DocumentManager.MdiActiveDocument.Editor;
+        public RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
+        public RXClass rxClassPoly = RXClass.GetClass(typeof(Polyline));
+        public RXClass rxClassRegion = RXClass.GetClass(typeof(Region));
+        public XrefGraphNode OSNOVA;
+        //layers for Hatches
+        public string[] laylistHatch = { "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный", "15_Здание_заливка" };
+        //Layers for polylines
+        public string[] laylistPL = { "16_Здание_контур_площадь_застройки", "31_Борт_100.30.15", "32_Борт_100.20.8", "33_Борт_100.45.18", "34_Борт_Металл", "35_Борт_Пластик" };
+        public string pLabelLayer = "32_Подписи_покрытий";
+        public string oLabelLayer = "50_Озеленение_подписи";
+        public string[] greeneryLayers = { "51_Деревья", "52_Кустарники" };
+        //Temporary layer data
+        public string tempLayer = "80_Временная_геометрия"; // layer for temporary geometry
+        public Color tempLayerColor = Color.FromColorIndex(ColorMethod.ByAci, 3);
+        public double tempLayerLineWeight = 2.0;
+        public bool tempLayerPrintable = false;
+        //Table handles
+        public long th = Convert.ToInt64("774A", 16); //Table handle for hatches
+        public long tp = Convert.ToInt64("78E16", 16); //Table handle for polylines
+        public long tb = Convert.ToInt64("78E73", 16); //Table handle for blocks
+
+        //All commands first
+        [CommandMethod("CountVol")]
+        public void CountVol()
+        {
+            // Getting list of Xrefs and starting form
+            MainForm mf = new MainForm();
+            XrefGraph XrGraph = db.GetHostDwgXrefGraph(false);
+            for (int i = 1; i < XrGraph.NumNodes; i++)
+            {
+                XrefGraphNode XrNode = XrGraph.GetXrefNode(i);
+                mf.Xrefselect.Items.Add(XrNode.Name);
+            }
+            mf.Show();
+        }
+
+        [CommandMethod("Olabel")]
+        public void Olabel()
+        {
+            OlabelsForm of = new OlabelsForm();
+            of.Show();
+        }
 
         [CommandMethod("hInt")]
         public void hInt()
@@ -29,8 +74,6 @@ namespace P_Volumes
         public void Plabel()
         {
             // Getting list of Xrefs and starting form
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
             PlabelsForm pf = new PlabelsForm();
             XrefGraph XrGraph = db.GetHostDwgXrefGraph(false);
             for (int i = 1; i < XrGraph.NumNodes; i++)
@@ -39,6 +82,25 @@ namespace P_Volumes
                 pf.Xrefselect.Items.Add(XrNode.Name);
             }
             pf.Show();
+        }
+        //Function to check if layer exist and create if not
+        public void LayerCheck(Transaction tr, string layer, Color color, double lw, Boolean isPlottable)
+        {
+            LayerTable lt = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
+            if (!lt.Has(layer))
+            {
+                var newLayer = new LayerTableRecord
+                {
+                    Name = layer,
+                    Color = color,
+                    LineWeight = (LineWeight)(lw*100),
+                    IsPlottable = isPlottable
+                };
+
+                lt.UpgradeOpen();
+                lt.Add(newLayer);
+                tr.AddNewlyCreatedDBObject(newLayer, true);
+            }
         }
         //Function finding intersection region of 2 polylines
         public Region regInt(Polyline pl1, Polyline pl2)
@@ -51,9 +113,9 @@ namespace P_Volumes
             var r2 = Region.CreateFromCurves(c2);
             if (r1 != null && r2 != null && r1.Count != 0 && r2.Count != 0)
             {
-                Region r11 = r1.Cast<Region>().First();
-                Region r21 = r2.Cast<Region>().First();
-                r11.BooleanOperation(BooleanOperationType.BoolIntersect, r21);
+                Region r11 = r1.Cast<Region>().First(); //region from first polyline
+                Region r21 = r2.Cast<Region>().First(); // region from second polyline
+                r11.BooleanOperation(BooleanOperationType.BoolIntersect, r21); // Creating intersection in first one
                 return r11;
             }
             return null;
@@ -61,27 +123,22 @@ namespace P_Volumes
         //Function to check hatches intersections
         public void HatInt()
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
-            Editor ed = doc.Editor;
-            RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
-            string[] laylistH = { "15_Здание_заливка", "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный" };
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 using (DocumentLock acLckDoc = doc.LockDocument())
                 {
                     var blockTable = tr.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
-                    var btr = tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
-                    List<Polyline> plines = new List<Polyline>();
+                    var btr = tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord; // FOrWrite, because we will add new objects
+                    List<Polyline> plines = new List<Polyline>(); // list of hatch boundaries
                     //Finding intersecting Hatches
                     foreach (ObjectId objectId in btr)
                     {
                         if (objectId.ObjectClass == rxClassHatch)
                         {
                             var hat = tr.GetObject(objectId, OpenMode.ForRead) as Hatch;
-                            for (int i = 0; i < laylistH.Length; i++)
+                            for (int i = 0; i < laylistHatch.Length; i++)
                             {
-                                if ((hat.Layer == laylistH[i]) && hat != null)
+                                if ((hat.Layer == laylistHatch[i]) && hat != null)
                                 {
                                     // can't instersec hatches, get polyline and intersect them or just get curves for each loop and intersect them??
                                     Plane plane = hat.GetPlane();
@@ -89,7 +146,7 @@ namespace P_Volumes
                                     for (int k = 0; k < nLoops; k++)
                                     {
                                         HatchLoop loop = hat.GetLoopAt(k);
-                                        var tmp = SelfIntArea(loop, plane);
+                                        var tmp = SelfIntArea(loop, plane); // getting polyline boundary of a hatch
                                         if (tmp != null)
                                         {
                                             plines.Add(tmp);
@@ -99,40 +156,27 @@ namespace P_Volumes
                             }
                         }
                     }
-                    int sCount = 1;
+                    int sCount = 1; // starting number for second for, so we won't repeat intersections we already did
                     for (int i = 0; i < plines.Count; i++)
                     {
-                        for (int j = sCount; j < plines.Count; j++)
+                        for (int j = sCount; j < plines.Count - 1; j++) // we don't need to intersect last one
                         {
-                            if (i != j)
+                            Region aReg = regInt(plines[i], plines[j]);
+                            if (aReg != null && aReg.Area != 0)
                             {
-                                Region aReg = regInt(plines[i], plines[j]);
-                                if (aReg != null && aReg.Area != 0)
-                                {
-                                    LayerTable lt = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
-                                    if (!lt.Has("80_Временная_геометрия"))
-                                    {
-                                        var newLayer = new LayerTableRecord();
-                                        newLayer.Name = "80_Временная_геометрия";
-                                        newLayer.Color = Color.FromColorIndex(ColorMethod.ByAci, 3);
-                                        newLayer.LineWeight = (LineWeight)200;
-                                        newLayer.IsPlottable = false;
-
-                                        lt.UpgradeOpen();
-                                        lt.Add(newLayer);
-                                        tr.AddNewlyCreatedDBObject(newLayer, true);
-                                    }
-                                    aReg.Layer = "80_Временная_геометрия";
-                                    btr.AppendEntity(aReg);
-                                    tr.AddNewlyCreatedDBObject(aReg, true);
-                                }
-                                else
-                                {
-                                    aReg.Dispose();
-                                }
+                                // checking if temporary layer exist, if not - creating it.
+                                LayerCheck(tr, tempLayer, tempLayerColor, tempLayerLineWeight, tempLayerPrintable);
+                                aReg.Layer = tempLayer;
+                                // Adding region to modelspace
+                                btr.AppendEntity(aReg);
+                                tr.AddNewlyCreatedDBObject(aReg, true);
+                            }
+                            else
+                            {
+                                aReg.Dispose();
                             }
                         }
-                        sCount++;
+                        sCount++; // adding one so it would start intersecting from next one
                     }
                     tr.Commit();
                 }
@@ -141,8 +185,6 @@ namespace P_Volumes
         //Function to clear temporary geometry
         public void ClearTemp()
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 using (DocumentLock acLckDoc = doc.LockDocument())
@@ -151,10 +193,10 @@ namespace P_Volumes
                     var btr = tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
                     foreach (ObjectId objectId in btr)
                     {
-                        if (objectId.ObjectClass == RXClass.GetClass(typeof(Region)))
+                        if (objectId.ObjectClass == rxClassRegion) // Checking for regions only
                         {
                             var obj = tr.GetObject(objectId, OpenMode.ForWrite) as Region;
-                            if (obj.Layer == "80_Временная_геометрия")
+                            if (obj.Layer == tempLayer) // Checking for temporary layer
                             {
                                 obj.Erase();
                             }
@@ -167,11 +209,6 @@ namespace P_Volumes
         //Function to check for rare cases then it isn't self-intersecting, but won't let you make region
         public void hCheck()
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
-            Editor ed = doc.Editor;
-            RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
-            string[] laylistH = { "15_Здание_заливка", "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный" };
             List<ObjectId> errors = new List<ObjectId>();
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
@@ -185,9 +222,9 @@ namespace P_Volumes
                         if (objectId.ObjectClass == rxClassHatch)
                         {
                             var hat = tr.GetObject(objectId, OpenMode.ForRead) as Hatch;
-                            for (int i = 0; i < laylistH.Length; i++)
+                            for (int i = 0; i < laylistHatch.Length; i++)
                             {
-                                if ((hat.Layer == laylistH[i]) && hat != null)
+                                if ((hat.Layer == laylistHatch[i]) && hat != null) //Getting all hatches on correct layer
                                 {
                                     Plane plane = hat.GetPlane();
                                     int nLoops = hat.NumberOfLoops;
@@ -206,11 +243,11 @@ namespace P_Volumes
                     }
                     if (errCount == 0)
                     {
-                        ed.WriteMessage("Проблемных штриховок не найдено" + "\n"); // if all hatches give back polylines
+                        ed.WriteMessage("Проблемных штриховок не найдено \n "); // if all hatches give back polylines
                     }
                     else
                     {
-                        ed.WriteMessage("Выделено" + errCount + "проблемных штриховок " + "\n");
+                        ed.WriteMessage($"Выделено {errCount} проблемных штриховок \n ");
                         ed.SetImpliedSelection(errors.ToArray()); // selecting bad hatches
                         ed.SelectImplied();
                     }
@@ -221,15 +258,8 @@ namespace P_Volumes
         //Function that labels hatches based on layer
         public void DoPlabel(string X, string[] a)
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
-            Editor ed = doc.Editor;
-            XrefGraphNode OSNOVA;
             string selectedOSN = X;
             XrefGraph XrGraph = db.GetHostDwgXrefGraph(false);
-            RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
-            string[] laylistH = { "|41_Покр_Проезд", "|49_Покр_Щебеночный_проезд", "|42_Покр_Тротуар", "|42_Покр_Тротуар_Пожарный", "|43_Покр_Отмостка", "|44_Покр_Детская_площадка", "|45_Покр_Спортивная_площадка", "|46_Покр_Площадка_отдыха", "|47_Покр_Хоз_площадка", "|48_Покр_Площадка_для_собак" };
-            string PlabelLayer = "32_Подписи_покрытий"; //layer for Mleaders
             using (Transaction trans = db.TransactionManager.StartTransaction())
             {
                 //selecting correct Xref
@@ -245,7 +275,9 @@ namespace P_Volumes
                 using (DocumentLock acLckDoc = doc.LockDocument())
                 {
                     var blockTable = trans.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
+                    //Getting BlockTableRecord for main document, ForWritem because wwe will add labels
                     var blocktableRecord = trans.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
+                    //Getting BlockTableRecord for xRef ForRead, we won't change it
                     var blocktableRecordOSN = trans.GetObject(OSNOVA.BlockTableRecordId, OpenMode.ForRead) as BlockTableRecord;
                     foreach (ObjectId objectId in blocktableRecordOSN)
                     {
@@ -253,9 +285,9 @@ namespace P_Volumes
                         if (objectId.ObjectClass == rxClassHatch)
                         {
                             var hat = trans.GetObject(objectId, OpenMode.ForRead) as Hatch;
-                            for (int i = 0; i < laylistH.Length; i++)
+                            for (int i = 1; i < laylistHatch.Length; i++) // From one, because we don't need label for first one
                             {
-                                if ((hat.Layer == selectedOSN + laylistH[i]) && hat != null)
+                                if ((hat.Layer == selectedOSN + "|" + laylistHatch[i]) && hat != null) // xRef name + | + Layername to find correct object.
                                 {
                                     try
                                     {
@@ -266,13 +298,13 @@ namespace P_Volumes
                                         MLeader leader = new MLeader();
                                         leader.SetDatabaseDefaults();
                                         leader.ContentType = ContentType.MTextContent;
-                                        leader.Layer = PlabelLayer;
+                                        leader.Layer = pLabelLayer;
                                         MText mText = new MText();
                                         mText.SetDatabaseDefaults();
                                         mText.Width = 0.675;
                                         mText.Height = 1.25;
                                         mText.TextHeight = 1.25;
-                                        mText.SetContentsRtf(a[i]);
+                                        mText.SetContentsRtf(a[i-1]);
                                         mText.Location = new Point3d(center.X + 2, center.Y + 2, center.Z);
                                         mText.Rotation = 0;
                                         mText.BackgroundFill = true;
@@ -284,7 +316,7 @@ namespace P_Volumes
                                     }
                                     catch
                                     {
-                                        ed.WriteMessage("\n" + "Ошибки, проверьте штриховки" + "\n");
+                                        ed.WriteMessage("Ошибки, проверьте штриховки \n");
                                     }
                                 }
                             }
@@ -295,14 +327,6 @@ namespace P_Volumes
                 }
             }
         }
-
-        [CommandMethod("Olabel")]
-        public void Olabel()
-        {
-            OlabelsForm of = new OlabelsForm();
-            of.Show();
-        }
-
         // Function to get all blocks on a Layer, including ones in array
         public List<Point3d> GetBlocksPosition(BlockTableRecord blocktablerecord, Transaction trans, string LayerName)
         {
@@ -324,21 +348,85 @@ namespace P_Volumes
                 //counting blocks in array
                 if (AssocArray.IsAssociativeArray(objectId))
                 {
-                    using (BlockReference br = (BlockReference)objectId.Open(OpenMode.ForRead))
+                    
+                    var array = AssocArray.GetAssociativeArray(objectId);
+
+                    var arrayParamsPa = array.GetParameters() as AssocArrayPathParameters;
+                    var arrayParamsRe = array.GetParameters() as AssocArrayRectangularParameters;
+                    var arrayParamsPo = array.GetParameters() as AssocArrayPolarParameters;
+
+
+                    if (arrayParamsPa != null)
                     {
-                        using (BlockTableRecord btr = br.DynamicBlockTableRecord.Open(OpenMode.ForRead) as BlockTableRecord)
+                        using (BlockReference br = (BlockReference)objectId.Open(OpenMode.ForRead))
                         {
-                            foreach (ObjectId ids in btr)
+                            using (BlockTableRecord btr = br.DynamicBlockTableRecord.Open(OpenMode.ForRead) as BlockTableRecord)
                             {
-                                if (ids.ObjectClass.Name == "AcDbBlockReference")
+                                foreach (ObjectId ids in btr)
                                 {
-                                    using (BlockReference bRef = (BlockReference)ids.Open(OpenMode.ForRead))
+                                    if (ids.ObjectClass.Name == "AcDbBlockReference")
                                     {
-                                        if (bRef.Layer == LayerName)
+                                        using (BlockReference bRef = (BlockReference)ids.Open(OpenMode.ForRead))
                                         {
-                                            pointsList.Add(bRef.Position);
+                                            string sourceLayer;
+                                            using (BlockReference blist = (BlockReference)array.SourceEntities[0].Open(OpenMode.ForRead))
+                                            {
+                                                sourceLayer = blist.Layer;
+                                            }
+                                            if (sourceLayer == LayerName)
+                                            {
+                                                pointsList.Add(bRef.Position);
+                                            }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                    if (arrayParamsRe != null)
+                    {
+                        using (BlockReference bRef = (BlockReference)objectId.Open(OpenMode.ForRead))
+                        {
+                            string sourceLayer;
+                            using (BlockReference blist = (BlockReference)array.SourceEntities[0].Open(OpenMode.ForRead))
+                            {
+                                sourceLayer = blist.Layer;
+                            }
+                            if (sourceLayer == LayerName)
+                            {
+                                var basePt = bRef.Position;
+                                var locators = array.getItems(true);
+                                foreach (var loc in locators)
+                                {
+                                    
+                                    var matrix = array.GetItemTransform(loc);
+                                    pointsList.Add(basePt.TransformBy(matrix));
+                                }
+                            }
+                        }
+                    }
+                    if (arrayParamsPo != null)
+                    {
+                        using (BlockReference bRef = (BlockReference)objectId.Open(OpenMode.ForRead))
+                        {
+                            string sourceLayer;
+                            using (BlockReference blist = (BlockReference)array.SourceEntities[0].Open(OpenMode.ForRead))
+                            {
+                                sourceLayer = blist.Layer;
+                            }
+                            if (sourceLayer == LayerName)
+                            {
+                                var basePt = bRef.Position;
+                                double[] mat1 = { 1.0, 0.0, 0.0, basePt.X, 0.0, 1.0, 0.0, basePt.Y, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 };
+                                double[] mat2 = { 1.0, 0.0, 0.0, -basePt.X , 0.0, 1.0, 0.0, -basePt.Y, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 };
+                                Matrix3d mat13d = new Matrix3d(mat1);
+                                Matrix3d mat23d = new Matrix3d(mat2);
+                                var basePtB = basePt.TransformBy(mat23d);
+                                var locators = array.getItems(true);
+                                foreach (var loc in locators)
+                                {
+                                    var matrix = array.GetItemTransform(loc);
+                                    pointsList.Add(basePtB.TransformBy(matrix).TransformBy(mat13d));
                                 }
                             }
                         }
@@ -376,7 +464,6 @@ namespace P_Volumes
             {
                 foreach (Curve2d cv in loop.Curves)
                 {
-
                     LineSegment2d line2d = cv as LineSegment2d;
                     CircularArc2d arc2d = cv as CircularArc2d;
                     EllipticalArc2d ellipse2d = cv as EllipticalArc2d;
@@ -482,10 +569,10 @@ namespace P_Volumes
 
             return looparea;
         }
-
+        //Function to group elements based on distance between 2 of them
         public List<List<Point3d>> GroupO(List<Point3d> Points, double Distance)
         {
-            // calclulate distance between points
+            // Calclulate distance between points
             List<List<double>> Dist = new List<List<double>>();
             for (int i = 0; i < Points.Count; i++)
             {
@@ -496,7 +583,7 @@ namespace P_Volumes
                     Dist[i].Add(Points[i].DistanceTo(Points[j]));
                 }
             }
-            //making lists of close objects
+            // Making lists of close objects
             List<List<int>> Close = new List<List<int>>();
             for (int i = 0; i < Points.Count; i++)
             {
@@ -509,7 +596,7 @@ namespace P_Volumes
                     }
                 }
             }
-            // make groups
+            // Making groups
             List<List<int>> Groups = new List<List<int>>();
             for (int i = 0; i < Points.Count; i++)
             {
@@ -530,7 +617,7 @@ namespace P_Volumes
                             }
                         }
                     }
-                    if (temp == temp2)
+                    if (temp == temp2) // If we didn't add new objects we go to next one
                     {
                         X = 1;
                     }
@@ -541,7 +628,7 @@ namespace P_Volumes
                 }
                 Groups.Add(temp);
             }
-            // clean group
+            // Clean group
             List<List<int>> GroupsClean = new List<List<int>>();
             for (int i = 0; i < Groups.Count; i++)
             {
@@ -563,18 +650,19 @@ namespace P_Volumes
                     GroupsClean.Add(m);
                 }
             }
-            // change back to coordinates
-            List<List<Point3d>> GroupsCoordinates = new List<List<Point3d>>();
+            // Change back to points
+            List<List<Point3d>> GroupPoints = new List<List<Point3d>>();
             for (int i = 0; i < GroupsClean.Count; i++)
             {
-                GroupsCoordinates.Add(new List<Point3d>());
+                GroupPoints.Add(new List<Point3d>());
                 foreach (int j in GroupsClean[i])
                 {
-                    GroupsCoordinates[i].Add(Points[j]);
+                    GroupPoints[i].Add(Points[j]);
                 }
             }
-            return GroupsCoordinates;
+            return GroupPoints;
         }
+        //Function that creates Mleaders for greenery
         public void CreateMleaderO(List<List<Point3d>> coords, Transaction trans, BlockTable BT, BlockTableRecord BR, Database db, string Tname, double rotAngle)
         {
             MLeader leader;
@@ -586,13 +674,13 @@ namespace P_Volumes
                 leader.SetDatabaseDefaults();
                 leader.MLeaderStyle = mlStyleId;
                 leader.ContentType = ContentType.BlockContent;
-                leader.Layer = "50_Озеленение_подписи";
+                leader.Layer = oLabelLayer;
                 leader.BlockContentId = BT["Выноска_озеленение"];
                 leader.BlockPosition = new Point3d(coords[i][0].X + 5, coords[i][0].Y + 5, 0);
                 leader.BlockRotation = rotAngle;
                 int idx = leader.AddLeaderLine(coords[i][0]);
                 // adding leader points for each element
-                //temporary solution, need sorting algorithm for better performance.
+                // TODO: temporary solution, need sorting algorithm for better performance.
                 if (coords[i].Count > 1)
                 {
                     foreach (Point3d m in coords[i])
@@ -629,11 +717,9 @@ namespace P_Volumes
                 trans.AddNewlyCreatedDBObject(leader, true);
             }
         }
+        // Function that adds label to greenery
         public void DoOlabel(string Tp, string Bp, float Td, float Bd)
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
-            Editor ed = doc.Editor;
             Matrix3d UCS = ed.CurrentUserCoordinateSystem;
             CoordinateSystem3d cs = UCS.CoordinateSystem3d;
             double rotAngle = cs.Xaxis.AngleOnPlane(new Plane(Point3d.Origin, Vector3d.ZAxis));
@@ -645,9 +731,10 @@ namespace P_Volumes
                 {
                     var blockTable = trans.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
                     var blocktableRecord = trans.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
+                    //TODO fix array coordinates
                     //Getting insertion points from blocks on defined layers
-                    TreePoints = GetBlocksPosition(blocktableRecord, trans, "52_Деревья");
-                    BushPoints = GetBlocksPosition(blocktableRecord, trans, "51_Кустарники");
+                    TreePoints = GetBlocksPosition(blocktableRecord, trans, greeneryLayers[0]);
+                    BushPoints = GetBlocksPosition(blocktableRecord, trans, greeneryLayers[1]);
                     //Grouping elements by max distance
                     List<List<Point3d>> TreeGroupsCoordinates = GroupO(TreePoints, Td);
                     List<List<Point3d>> BushGroupsCoordinates = GroupO(BushPoints, Bd);
@@ -658,12 +745,9 @@ namespace P_Volumes
                 trans.Commit();
             }
         }
+        // Function checks if hatch has Area and selects hatches that don't
         public void CheckHatch()
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
-            Editor ed = doc.Editor;
-            RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
             List<ObjectId> errors = new List<ObjectId>(); //list of objectId
             using (Transaction trans = db.TransactionManager.StartTransaction())
             {
@@ -692,53 +776,33 @@ namespace P_Volumes
                     // selecting objects
                     if (i == 0)
                     {
-                        ed.WriteMessage("Самопересечений не найдено"+"\n"); // if all hatches have Area
+                        ed.WriteMessage("Самопересечений не найдено \n "); // if all hatches have Area
                     }
                     else
                     {
-                        ed.WriteMessage("Выделено" + i + "самопересекающихся штриховок" + "\n");
-                        ed.SetImpliedSelection(errors.ToArray()); // selecting bad hatches
-                        ed.SelectImplied();
+                        ed.WriteMessage($"Выделено {i} самопересекающихся штриховок \n ");
+                        ed.SetImpliedSelection(errors.ToArray()); 
+                        ed.SelectImplied(); // selecting bad hatches
                     }
                     trans.Commit();
                 }
             }
         }
-
-        [CommandMethod("CountVol")]
-        public void CountVol()
-        {
-            // Getting list of Xrefs and starting form
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
-            MainForm mf = new MainForm();
-            XrefGraph XrGraph = db.GetHostDwgXrefGraph(false);
-            for (int i = 1; i < XrGraph.NumNodes; i++)
-            {
-                XrefGraphNode XrNode = XrGraph.GetXrefNode(i);
-                mf.Xrefselect.Items.Add(XrNode.Name);
-            }
-            mf.Show();
-        }
         //Counting Volumes
-        public void RealCount(string X, int a, int b, int c)
+        public void DoCount(string X, int a, int b, int c)
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
-            Editor ed = doc.Editor;
-            XrefGraphNode OSNOVA;
             string selectedOSN = X;
             XrefGraph XrGraph = db.GetHostDwgXrefGraph(false);
-            long ln = Convert.ToInt64("774A", 16); //Table handle
-            Handle hn = new Handle(ln);
-            ObjectId id = db.GetObjectId(false, hn, 0); // Getting table object
-            RXClass rxClassPoly = RXClass.GetClass(typeof(Polyline));
-            RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
-            double[] TableValues = new double[19];
-            string[] ErrorValues = new string[19];
-            string[] laylistPL = { "|31_Борт_100.30.15", "|32_Борт_100.20.8", "|33_Борт_100.45.18", "|34_Борт_Металл", "|35_Борт_Пластик" };
-            int[] PL_count = { a, b, c, 1, 1 };
-            string[] laylistH = { "|41_Покр_Проезд", "|49_Покр_Щебеночный_проезд", "|42_Покр_Тротуар", "|42_Покр_Тротуар_Пожарный", "|43_Покр_Отмостка", "|44_Покр_Детская_площадка", "|45_Покр_Спортивная_площадка", "|46_Покр_Площадка_отдыха", "|47_Покр_Хоз_площадка", "|48_Покр_Площадка_для_собак", "|51_Газон", "|52_Газон_пожарный" };
+            ObjectId idh = db.GetObjectId(false, new Handle(th), 0); // Getting table object 
+            ObjectId idp = db.GetObjectId(false, new Handle(tp), 0);
+            ObjectId idb = db.GetObjectId(false, new Handle(tb), 0);
+            double[] hatchValues = new double[12];
+            string[] hatchErrors = new string[12];
+            double[] plineValues = new double[6];
+            string[] plineErrors = new string[6];
+            double[] blockValues = new double[8];
+            string[] blockErrors = new string[8];
+            int[] PL_count = { 1, a, b, c, 1, 1 };
 
             using (Transaction trans = db.TransactionManager.StartTransaction())
             {
@@ -756,7 +820,6 @@ namespace P_Volumes
                     var blockTable = trans.GetObject(db.BlockTableId, OpenMode.ForRead, false) as BlockTable;
                     var blocktableRecord = trans.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
                     var blocktableRecordOSN = trans.GetObject(OSNOVA.BlockTableRecordId, OpenMode.ForRead) as BlockTableRecord;
-                    var Tabl = trans.GetObject(id, OpenMode.ForWrite) as Table;
                     foreach (ObjectId objectId in blocktableRecordOSN)
                     {
                         if (objectId.ObjectClass == rxClassPoly)
@@ -764,28 +827,28 @@ namespace P_Volumes
                             var poly = trans.GetObject(objectId, OpenMode.ForRead) as Polyline;
                             for (int i = 0; i < laylistPL.Length; i++)
                             {
-                                if ((poly.Layer == selectedOSN + laylistPL[i]) && poly != null)
+                                if ((poly.Layer == selectedOSN + "|" + laylistPL[i]) && poly != null)
                                 {
-                                    TableValues[14 + i] += poly.GetDistanceAtParameter(poly.EndParam) / PL_count[i];
+                                    plineValues[i] += poly.GetDistanceAtParameter(poly.EndParam) / PL_count[i];
                                 }
-
+                                // TODO: add check for values and fill errors
                             }
 
                         }
                         if (objectId.ObjectClass == rxClassHatch)
                         {
                             var hat = trans.GetObject(objectId, OpenMode.ForRead) as Hatch;
-                            for (int i = 0; i < laylistH.Length; i++)
+                            for (int i = 0; i < laylistHatch.Length-1; i++)
                             {
-                                if ((hat.Layer == selectedOSN + laylistH[i]) && hat != null)
+                                if ((hat.Layer == selectedOSN + "|" + laylistHatch[i]) && hat != null)
                                 {
                                     try
                                     {
-                                        TableValues[i] += hat.Area;
+                                        hatchValues[i] += hat.Area;
                                     }
                                     catch
                                     {
-                                        ErrorValues[i] = "Самопересечение";
+                                        hatchErrors[i] = "Самопересечение";
                                         //changing to count self-intersecting hatches
                                         Plane plane = hat.GetPlane();
                                         int nLoops = hat.NumberOfLoops;
@@ -795,10 +858,12 @@ namespace P_Volumes
                                             HatchLoop loop = hat.GetLoopAt(k);
                                             HatchLoopTypes hlt = hat.LoopTypeAt(k);
                                             Polyline looparea = SelfIntArea(loop, plane);
+                                            // Can get correct value from AcadObject, but need to add in first
                                             blocktableRecord.AppendEntity(looparea);
                                             trans.AddNewlyCreatedDBObject(looparea, true);
                                             object pl = looparea.AcadObject;
                                             var corrval = (double)pl.GetType().InvokeMember("Area", BindingFlags.GetProperty, null, pl, null);
+                                            // Erasing polylines after getting area
                                             PromptSelectionResult acSSPrompt = ed.SelectLast();
                                             Entity delent;
                                             SelectionSet ss = acSSPrompt.Value;
@@ -807,16 +872,16 @@ namespace P_Volumes
                                                 delent = trans.GetObject(ss[0].ObjectId, OpenMode.ForWrite) as Entity;
                                                 delent.Erase();
                                             }
-                                            if (hlt == HatchLoopTypes.External)
+                                            if (hlt == HatchLoopTypes.External) // External loops with +
                                             {
                                                 corArea += corrval;
                                             }
-                                            else
+                                            else // Internal with -
                                             {
                                                 corArea -= corrval;
                                             }
                                         }
-                                        TableValues[i] += corArea;
+                                        hatchValues[i] += corArea;
                                     }
                                 }
 
@@ -824,28 +889,70 @@ namespace P_Volumes
 
                         }
                     }
-                    TableValues[12] = GetBlocksPosition(blocktableRecord, trans, "52_Деревья").Count;
-                    TableValues[13] = GetBlocksPosition(blocktableRecord, trans, "51_Кустарники").Count;
-                    for (int j = 0; j < TableValues.Length; j++)
+                    // Rounding curbs
+                    for (int i = 1; i < plineValues.Length; i++)
                     {
-                        if (TableValues[j] == 0)
+                        plineValues[i] = Math.Ceiling(plineValues[i]);
+                    }
+                    // Counting blocks
+                    blockValues[0] = GetBlocksPosition(blocktableRecord, trans, greeneryLayers[0]).Count;
+                    blockValues[1] = GetBlocksPosition(blocktableRecord, trans, greeneryLayers[1]).Count;
+                    // Checking hatches
+                    for (int i = 0; i < hatchValues.Length; i++)
+                    {
+                        if (hatchValues[i] == 0)
                         {
-                            ErrorValues[j] = "Нет Элементов";
+                            hatchErrors[i] = "Нет Элементов";
                         }
-                        if (TableValues[j] > 0 && ErrorValues[j] != "Самопересечение")
+                        if (hatchValues[i] > 0 && hatchErrors[i] != "Самопересечение")
                         {
-                            ErrorValues[j] = "Всё в порядке";
+                            hatchErrors[i] = "Всё в порядке";
                         }
                     }
-                    for (int m = 14; m < 19; m++)
+                    // Checking polylines
+                    for (int i = 0; i < plineValues.Length; i++)
                     {
-                        TableValues[m] = Math.Ceiling(TableValues[m]);
+                        if (plineValues[i] == 0)
+                        {
+                            plineErrors[i] = "Нет Элементов";
+                        }
+                        if (plineValues[i] > 0)
+                        {
+                            plineErrors[i] = "Всё в порядке";
+                        }
                     }
-                    for (int i = 0; i < TableValues.Length; i++)
+                    // Checking blocks
+                    for (int i = 0; i < blockValues.Length; i++)
                     {
-                        double mem = TableValues[i];
-                        Tabl.SetTextString(2 + i, 1, mem.ToString("0.##"));
-                        Tabl.SetTextString(2 + i, 2, ErrorValues[i]);
+                        if (blockValues[i] == 0)
+                        {
+                            blockErrors[i] = "Нет Элементов";
+                        }
+                        if (blockValues[i] > 0)
+                        {
+                            blockErrors[i] = "Всё в порядке";
+                        }
+                    }
+                    // Filling hatch table
+                    var tablH = trans.GetObject(idh, OpenMode.ForWrite) as Table;
+                    for (int i = 0; i < hatchValues.Length; i++)
+                    {
+                        tablH.SetTextString(2 + i, 1, hatchValues[i].ToString("0.##"));
+                        tablH.SetTextString(2 + i, 2, hatchErrors[i]);
+                    }
+                    // Filling polyline table
+                    var tablP = trans.GetObject(idp, OpenMode.ForWrite) as Table;
+                    for (int i = 0; i < plineValues.Length; i++)
+                    {
+                        tablP.SetTextString(2 + i, 1, plineValues[i].ToString("0.##"));
+                        tablP.SetTextString(2 + i, 2, plineErrors[i]);
+                    }
+                    // Filling block table
+                    var tablB = trans.GetObject(idb, OpenMode.ForWrite) as Table;
+                    for (int i = 0; i < blockValues.Length; i++)
+                    {
+                        tablB.SetTextString(2 + i, 1, blockValues[i].ToString("0.##"));
+                        tablB.SetTextString(2 + i, 2, blockErrors[i]);
                     }
                     trans.Commit();
                 }
