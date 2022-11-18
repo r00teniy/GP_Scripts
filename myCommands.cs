@@ -29,9 +29,12 @@ namespace P_Volumes
         public string[] laylistHatch = { "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный", "15_Здание_заливка" };
         //Layers for polylines
         public string[] laylistPL = { "16_Здание_контур_площадь_застройки", "31_Борт_100.30.15", "32_Борт_100.20.8", "33_Борт_100.45.18", "34_Борт_Металл", "35_Борт_Пластик" };
+        //Layers for blocks
+        public string[] laylistBlock = { "51_Деревья", "52_Кустарники" };
+        //Layer for pavement labels
         public string pLabelLayer = "32_Подписи_покрытий";
+        //Layer for greenery labels
         public string oLabelLayer = "50_Озеленение_подписи";
-        public string[] greeneryLayers = { "51_Деревья", "52_Кустарники" };
         //Temporary layer data
         public string tempLayer = "80_Временная_геометрия"; // layer for temporary geometry
         public Color tempLayerColor = Color.FromColorIndex(ColorMethod.ByAci, 3);
@@ -733,8 +736,8 @@ namespace P_Volumes
                     var blocktableRecord = trans.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite, false) as BlockTableRecord;
                     //TODO fix array coordinates
                     //Getting insertion points from blocks on defined layers
-                    TreePoints = GetBlocksPosition(blocktableRecord, trans, greeneryLayers[0]);
-                    BushPoints = GetBlocksPosition(blocktableRecord, trans, greeneryLayers[1]);
+                    TreePoints = GetBlocksPosition(blocktableRecord, trans, laylistBlock[0]);
+                    BushPoints = GetBlocksPosition(blocktableRecord, trans, laylistBlock[1]);
                     //Grouping elements by max distance
                     List<List<Point3d>> TreeGroupsCoordinates = GroupO(TreePoints, Td);
                     List<List<Point3d>> BushGroupsCoordinates = GroupO(BushPoints, Bd);
@@ -829,7 +832,16 @@ namespace P_Volumes
                             {
                                 if ((poly.Layer == selectedOSN + "|" + laylistPL[i]) && poly != null)
                                 {
-                                    plineValues[i] += poly.GetDistanceAtParameter(poly.EndParam) / PL_count[i];
+                                    if (i == 0) // for area
+                                    {
+                                        // Getting from AcadObject for cases of selfintersection
+                                        object pl = poly.AcadObject;
+                                        plineValues[i] = (double)pl.GetType().InvokeMember("Area", BindingFlags.GetProperty, null, pl, null);
+                                    }
+                                    else
+                                    {
+                                        plineValues[i] += poly.GetDistanceAtParameter(poly.EndParam) / PL_count[i];
+                                    }
                                 }
                                 // TODO: add check for values and fill errors
                             }
@@ -863,15 +875,7 @@ namespace P_Volumes
                                             trans.AddNewlyCreatedDBObject(looparea, true);
                                             object pl = looparea.AcadObject;
                                             var corrval = (double)pl.GetType().InvokeMember("Area", BindingFlags.GetProperty, null, pl, null);
-                                            // Erasing polylines after getting area
-                                            PromptSelectionResult acSSPrompt = ed.SelectLast();
-                                            Entity delent;
-                                            SelectionSet ss = acSSPrompt.Value;
-                                            if (ss.Count > 0)
-                                            {
-                                                delent = trans.GetObject(ss[0].ObjectId, OpenMode.ForWrite) as Entity;
-                                                delent.Erase();
-                                            }
+                                            looparea.Erase(); // Erasing polyline we just created
                                             if (hlt == HatchLoopTypes.External) // External loops with +
                                             {
                                                 corArea += corrval;
@@ -895,8 +899,8 @@ namespace P_Volumes
                         plineValues[i] = Math.Ceiling(plineValues[i]);
                     }
                     // Counting blocks
-                    blockValues[0] = GetBlocksPosition(blocktableRecord, trans, greeneryLayers[0]).Count;
-                    blockValues[1] = GetBlocksPosition(blocktableRecord, trans, greeneryLayers[1]).Count;
+                    blockValues[0] = GetBlocksPosition(blocktableRecord, trans, laylistBlock[0]).Count;
+                    blockValues[1] = GetBlocksPosition(blocktableRecord, trans, laylistBlock[1]).Count;
                     // Checking hatches
                     for (int i = 0; i < hatchValues.Length; i++)
                     {
