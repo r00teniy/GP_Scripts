@@ -2,7 +2,7 @@
 using System.Globalization;
 using System.Windows.Forms;
 
-namespace P_Volumes
+namespace GP_scripts
 {
     public partial class OlabelsForm : Form
     {

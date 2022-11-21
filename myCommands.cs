@@ -12,9 +12,9 @@ using System.Reflection;
 using Autodesk.AutoCAD.Colors;
 
 // This line is not mandatory, but improves loading performances
-[assembly: CommandClass(typeof(P_Volumes.MyCommands))]
+[assembly: CommandClass(typeof(GP_scripts.MyCommands))]
 
-namespace P_Volumes
+namespace GP_scripts
 {
     public class MyCommands
     {
@@ -24,13 +24,14 @@ namespace P_Volumes
         public RXClass rxClassHatch = RXClass.GetClass(typeof(Hatch));
         public RXClass rxClassPoly = RXClass.GetClass(typeof(Polyline));
         public RXClass rxClassRegion = RXClass.GetClass(typeof(Region));
+        public RXClass rxClassBlockReference = RXClass.GetClass(typeof(BlockReference));
         public XrefGraphNode OSNOVA;
         //layers for Hatches
         public string[] laylistHatch = { "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный", "15_Здание_заливка" };
         //Layers for polylines
         public string[] laylistPL = { "09_Граница_благоустройства", "16_Здание_контур_площадь_застройки", "31_Борт_100.30.15", "32_Борт_100.20.8", "33_Борт_100.45.18", "34_Борт_Металл", "35_Борт_Пластик" };
         //Layers for blocks
-        public string[] laylistBlock = { "51_Деревья", "52_Кустарники" };
+        public string[] laylistBlock = { "51_Деревья", "52_Кустарники", "12_Тактильная_плитка" };
         //Layer for pavement labels
         public string pLabelLayer = "32_Подписи_покрытий";
         //Layer for greenery labels
@@ -44,6 +45,8 @@ namespace P_Volumes
         public long th = Convert.ToInt64("774A", 16); //Table handle for hatches
         public long tp = Convert.ToInt64("78E16", 16); //Table handle for polylines
         public long tb = Convert.ToInt64("78E73", 16); //Table handle for blocks
+        //Tactile indicators names
+        public string[] tactileNames = { "Линии вдоль", "Линии поперек", "Линии диагональ", "Конусы шахматный", "Конусы квадрат", "1 Линия", "2 Линии" };
 
         //All commands first
         [CommandMethod("CountVol")]
@@ -336,7 +339,7 @@ namespace P_Volumes
             List<Point3d> pointsList = new List<Point3d>();
             foreach (ObjectId objectId in blocktablerecord)
             {
-                if (objectId.ObjectClass == RXClass.GetClass(typeof(BlockReference)))
+                if (objectId.ObjectClass == rxClassBlockReference)
                 {
                     var blr = trans.GetObject(objectId, OpenMode.ForRead) as BlockReference;
                     if (blr.Layer == LayerName && blr != null)
@@ -888,7 +891,36 @@ namespace P_Volumes
                                         hatchValues[i] += corArea;
                                     }
                                 }
-
+                            }
+                        }
+                        
+                    }
+                    //Counting tactile indicators
+                    foreach (ObjectId objectId in blocktableRecord)
+                    {
+                        if (objectId.ObjectClass == rxClassBlockReference)
+                        {
+                            var br = trans.GetObject(objectId, OpenMode.ForRead) as BlockReference;
+                            if (br.Layer == laylistBlock[2])
+                            {
+                                if (br != null && br.IsDynamicBlock)
+                                {
+                                    DynamicBlockReferencePropertyCollection pc = br.DynamicBlockReferencePropertyCollection;
+                                    for (int i = 0; i < tactileNames.Length; i++)
+                                    {
+                                        if (tactileNames[i] == pc[0].Value.ToString())
+                                        {
+                                            if (tactileNames[i] == "2 Линии") // This varians is just 2x previous one, so no separate row
+                                            {
+                                                blockValues[1 + i] += Convert.ToDouble(pc[1].Value) / 0.3;
+                                            }
+                                            else
+                                            {
+                                                blockValues[2 + i] += Convert.ToDouble(pc[1].Value) / 0.6;
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                         }

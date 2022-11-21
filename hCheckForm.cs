@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Windows.Forms;
 
-namespace P_Volumes
+namespace GP_scripts
 {
     public partial class hCheckForm : Form
     {

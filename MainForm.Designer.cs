@@ -1,5 +1,5 @@
 ﻿
-namespace P_Volumes
+namespace GP_scripts
 {
     partial class MainForm
     {

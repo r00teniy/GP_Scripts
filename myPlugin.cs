@@ -3,9 +3,9 @@
 using Autodesk.AutoCAD.Runtime;
 
 // This line is not mandatory, but improves loading performances
-[assembly: ExtensionApplication(typeof(P_Volumes.MyPlugin))]
+[assembly: ExtensionApplication(typeof(GP_scripts.MyPlugin))]
 
-namespace P_Volumes
+namespace GP_scripts
 {
     // This class is instantiated by AutoCAD once and kept alive for the 
     // duration of the session. If you don't do any one time initialization 
