@@ -46,7 +46,7 @@ namespace GP_scripts
         public long tp = Convert.ToInt64("78E16", 16); //Table handle for polylines
         public long tb = Convert.ToInt64("78E73", 16); //Table handle for blocks
         //Tactile indicators names
-        public string[] tactileNames = { "Линии вдоль", "Линии поперек", "Линии диагональ", "Конусы шахматный", "Конусы квадрат", "1 Линия", "2 Линии" };
+        public string[] tactileNames = { "Линии вдоль", "Линии поперек", "Конусы шахматный", "Конусы квадрат", "1 Линия", "2 Линии", "Шуцлиния" };
 
         //All commands first
         [CommandMethod("CountVol")]
@@ -846,7 +846,6 @@ namespace GP_scripts
                                         plineValues[i] += poly.GetDistanceAtParameter(poly.EndParam) / PL_count[i];
                                     }
                                 }
-                                // TODO: add check for values and fill errors
                             }
 
                         }
@@ -912,11 +911,15 @@ namespace GP_scripts
                                         {
                                             if (tactileNames[i] == "Линии вдоль")
                                             {
-                                                blockValues[2 + i] += Convert.ToDouble(pc[1].Value) / 0.6;
-                                            }
-                                            if (tactileNames[i] == "2 Линии") // This varians is just 2x previous one, so no separate row
+                                                blockValues[2 + i] += Convert.ToDouble(pc[1].Value) / 0.6; // first 2 are same, but rotated 90
+                                            } 
+                                            else if (tactileNames[i] == "2 Линии")
                                             {
-                                                blockValues[i] += Convert.ToDouble(pc[1].Value) / 0.3;
+                                                blockValues[i] += Convert.ToDouble(pc[1].Value) / 0.3; // 1 line and 2 line are same
+                                            }
+                                            else if (tactileNames[i] == "Шуцлиния")
+                                            {
+                                                blockValues[i] += Convert.ToDouble(pc[1].Value) / 0.6;
                                             }
                                             else
                                             {
