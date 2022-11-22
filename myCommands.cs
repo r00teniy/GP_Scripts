@@ -910,13 +910,17 @@ namespace GP_scripts
                                     {
                                         if (tactileNames[i] == pc[0].Value.ToString())
                                         {
+                                            if (tactileNames[i] == "Линии вдоль")
+                                            {
+                                                blockValues[2 + i] += Convert.ToDouble(pc[1].Value) / 0.6;
+                                            }
                                             if (tactileNames[i] == "2 Линии") // This varians is just 2x previous one, so no separate row
                                             {
-                                                blockValues[1 + i] += Convert.ToDouble(pc[1].Value) / 0.3;
+                                                blockValues[i] += Convert.ToDouble(pc[1].Value) / 0.3;
                                             }
                                             else
                                             {
-                                                blockValues[2 + i] += Convert.ToDouble(pc[1].Value) / 0.6;
+                                                blockValues[1 + i] += Convert.ToDouble(pc[1].Value) / 0.6;
                                             }
                                         }
                                     }
