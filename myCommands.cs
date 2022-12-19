@@ -8,8 +8,12 @@ using Autodesk.AutoCAD.Runtime;
 using System.Linq;
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Reflection;
 using Autodesk.AutoCAD.Colors;
+using System.Configuration;
+using System.IO;
+using System.Xml.Linq;
 
 // This line is not mandatory, but improves loading performances
 [assembly: CommandClass(typeof(GP_scripts.MyCommands))]
@@ -27,27 +31,27 @@ namespace GP_scripts
         public RXClass rxClassBlockReference = RXClass.GetClass(typeof(BlockReference));
         public XrefGraphNode OSNOVA;
         //layers for Hatches
-        public string[] laylistHatch = { "41_Покр_Проезд", "49_Покр_Щебеночный_проезд", "42_Покр_Тротуар", "42_Покр_Тротуар_Пожарный", "43_Покр_Отмостка", "44_Покр_Детская_площадка", "45_Покр_Спортивная_площадка", "46_Покр_Площадка_отдыха", "47_Покр_Хоз_площадка", "48_Покр_Площадка_для_собак", "51_Газон", "52_Газон_пожарный", "15_Здание_заливка" };
+        public string[] laylistHatch;
         //Layers for polylines
-        public string[] laylistPL = { "09_Граница_благоустройства", "16_Здание_контур_площадь_застройки", "31_Борт_100.30.15", "32_Борт_100.20.8", "33_Борт_100.45.18", "34_Борт_Металл", "35_Борт_Пластик" };
+        public string[] laylistPL;
         //Layers for blocks
-        public string[] laylistBlock = { "51_Деревья", "52_Кустарники", "12_Тактильная_плитка" };
+        public string[] laylistBlock;
+        //Tactile indicators names
+        public string[] tactileNames;
         //Layer for pavement labels
-        public string pLabelLayer = "32_Подписи_покрытий";
+        public string pLabelLayer;
         //Layer for greenery labels
-        public string oLabelLayer = "50_Озеленение_подписи";
+        public string oLabelLayer;
         //Temporary layer data
-        public string tempLayer = "80_Временная_геометрия"; // layer for temporary geometry
+        public string tempLayer; // layer for temporary geometry
         public Color tempLayerColor = Color.FromColorIndex(ColorMethod.ByAci, 3);
         public double tempLayerLineWeight = 2.0;
         public bool tempLayerPrintable = false;
         //Table handles
-        public long th = Convert.ToInt64("774A", 16); //Table handle for hatches
-        public long tp = Convert.ToInt64("78E16", 16); //Table handle for polylines
-        public long tb = Convert.ToInt64("78E73", 16); //Table handle for blocks
-        //Tactile indicators names
-        public string[] tactileNames = { "Линии вдоль", "Линии поперек", "Конусы шахматный", "Конусы квадрат", "1 Линия", "2 Линии", "Шуцлиния" };
-
+        public long th; //Table handle for hatches
+        public long tp; //Table handle for polylines
+        public long tb; //Table handle for blocks
+        
         //All commands first
         [CommandMethod("CountVol")]
         public void CountVol()
@@ -88,6 +92,22 @@ namespace GP_scripts
                 pf.Xrefselect.Items.Add(XrNode.Name);
             }
             pf.Show();
+        }
+        //Get settings from file
+        public void GetConfigurationFromFile()
+        {
+            string path = Path.GetDirectoryName(Assembly.GetCallingAssembly().CodeBase) + @"\GP_scripts.dll.config";
+            XDocument dc = XDocument.Load(path);
+            laylistHatch = dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "laylistHatch").FirstOrDefault().Attribute("value").Value.ToString().Split(',');
+            laylistPL = dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "laylistPL").FirstOrDefault().Attribute("value").Value.ToString().Split(',');
+            laylistBlock = dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "laylistBlock").FirstOrDefault().Attribute("value").Value.ToString().Split(',');
+            tactileNames = dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "tactileNames").FirstOrDefault().Attribute("value").Value.ToString().Split(',');
+            pLabelLayer = dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "pLabelLayer").FirstOrDefault().Attribute("value").Value.ToString();
+            oLabelLayer = dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "oLabelLayer").FirstOrDefault().Attribute("value").Value.ToString();
+            tempLayer = dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "tempLayer").FirstOrDefault().Attribute("value").Value.ToString();
+            th = Convert.ToInt64(dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "th").FirstOrDefault().Attribute("value").Value.ToString(), 16);
+            tp = Convert.ToInt64(dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "tp").FirstOrDefault().Attribute("value").Value.ToString(), 16);
+            tb = Convert.ToInt64(dc.Descendants("appSettings").Nodes().Cast<XElement>().Where(x => x.Attribute("key").Value.ToString() == "tb").FirstOrDefault().Attribute("value").Value.ToString(), 16);
         }
         //Function to check if layer exist and create if not
         public void LayerCheck(Transaction tr, string layer, Color color, double lw, Boolean isPlottable)

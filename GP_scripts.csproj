@@ -58,17 +58,20 @@
     <Reference Include="AcCoreMgd">
       <SpecificVersion>False</SpecificVersion>
       <Private>False</Private>
+      <HintPath>C:\Autodesk\ObjectARX_for_AutoCAD_2022_Win_64bit_dlm\inc\AcCoreMgd.dll</HintPath>
     </Reference>
     <Reference Include="AcDbMgd">
       <SpecificVersion>False</SpecificVersion>
       <Private>False</Private>
+      <HintPath>C:\Autodesk\ObjectARX_for_AutoCAD_2022_Win_64bit_dlm\inc\AcDbMgd.dll</HintPath>
     </Reference>
     <Reference Include="AcMgd">
       <SpecificVersion>False</SpecificVersion>
       <Private>False</Private>
+      <HintPath>C:\Autodesk\ObjectARX_for_AutoCAD_2022_Win_64bit_dlm\inc\AcMgd.dll</HintPath>
     </Reference>
     <Reference Include="AecBaseMgd">
-      <HintPath>..\..\..\..\..\Program Files\Autodesk\AutoCAD 2021\AecBaseMgd.dll</HintPath>
+      <HintPath>C:\Program Files\Autodesk\AutoCAD 2022\AecBaseMgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <!--ACA References Begin-->
@@ -76,16 +79,19 @@
     <!--AME Referebces Begin-->
     <!--AME Reference End-->
     <Reference Include="System" />
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".editorconfig" />
+    <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="hCheckForm.cs">
